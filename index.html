@@ -1,91 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Videogames Drawing</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Videogames - Interactive Drawing</title>
   <style>
-    body, html {
+    body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: black;
+      background-color: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
     }
 
-    canvas {
+    #canvas {
+      position: absolute;
+      z-index: 2;
+    }
+
+    #webcam {
       position: absolute;
       top: 0;
       left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
     }
 
-    #video-bg {
-      position: fixed;
+    #lyrics {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 2rem;
+      font-family: Arial, sans-serif;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+      z-index: 3;
+    }
+
+    #video {
+      position: absolute;
       top: 0;
       left: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: -1;
-      opacity: 0.4;
-      pointer-events: none;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      z-index: 0;
+      transition: opacity 1s ease;
     }
   </style>
 </head>
 <body>
-  <div id="video-bg">
-    <iframe width="100%" height="100%" 
-      src="https://www.youtube.com/embed/cE6wxDqdOV0?autoplay=1&mute=1&loop=1&playlist=cE6wxDqdOV0" 
-      frameborder="0" allow="autoplay; encrypted-media" allowfullscreen>
-    </iframe>
-  </div>
-  <canvas id="draw-canvas"></canvas>
+  <!-- Video clip -->
+  <video id="video" autoplay loop muted>
+    <source src="https://files.catbox.moe/9qfgty.mp3" type="audio/mpeg">
+    Your browser does not support the video tag.
+  </video>
+
+  <!-- Webcam -->
+  <video id="webcam" autoplay></video>
+
+  <!-- Canvas for drawing -->
+  <canvas id="canvas"></canvas>
+
+  <!-- Lyrics display -->
+  <div id="lyrics">Videogames</div>
 
   <script>
-    const canvas = document.getElementById('draw-canvas');
+    const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const webcam = document.getElementById('webcam');
+    const lyrics = document.getElementById('lyrics');
+    const video = document.getElementById('video');
+    
+    // Adjust canvas size
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    // Access webcam and mic
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    // Set up webcam stream
+    navigator.mediaDevices.getUserMedia({ video: true })
       .then(stream => {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const micSource = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        micSource.connect(analyser);
-        analyser.fftSize = 256;
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-        let x = canvas.width / 2;
-        let y = canvas.height / 2;
-
-        function draw() {
-          analyser.getByteFrequencyData(dataArray);
-          const volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
-
-          const angle = Math.random() * 2 * Math.PI;
-          const speed = volume / 20;
-          x += Math.cos(angle) * speed;
-          y += Math.sin(angle) * speed;
-
-          ctx.beginPath();
-          ctx.arc(x, y, 2 + volume / 30, 0, 2 * Math.PI);
-          ctx.fillStyle = `hsl(${volume * 2}, 100%, 70%)`;
-          ctx.fill();
-
-          requestAnimationFrame(draw);
-        }
-
-        draw();
+        webcam.srcObject = stream;
       })
       .catch(err => {
-        console.error("Access denied or error: ", err);
-        alert("Please allow webcam and microphone access to run this experience.");
+        console.log("Error accessing webcam: ", err);
       });
+
+    // Set up the audio
+    const audio = new Audio('https://files.catbox.moe/9qfgty.mp3');
+    audio.play();
+
+    // Setup drawing
+    let drawing = false;
+
+    const draw = (e) => {
+      if (!drawing) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      ctx.beginPath();
+      ctx.arc(x, y, 10, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+      ctx.fill();
+    };
+
+    canvas.addEventListener('mousemove', draw);
+
+    // Function to show the lyrics at intervals
+    const showLyrics = () => {
+      const lyricText = [
+        "Singing in the moonlight...",
+        "Dancing through the night...",
+        // Add more lyrics here
+      ];
+
+      let currentIndex = 0;
+      const interval = setInterval(() => {
+        if (currentIndex < lyricText.length) {
+          lyrics.textContent = lyricText[currentIndex];
+          lyrics.style.opacity = 1;
+
+          // After a few seconds hide the lyrics and move to next
+          setTimeout(() => {
+            lyrics.style.opacity = 0;
+            currentIndex++;
+          }, 3000);
+        } else {
+          clearInterval(interval);
+        }
+      }, 4000); // Update lyrics every 4 seconds
+    };
+
+    // Show video gradually
+    const showVideo = () => {
+      setTimeout(() => {
+        video.style.opacity = 1; // Fade in video
+      }, 2000); // Delay showing video
+    };
+
+    // Trigger the functions when the audio starts
+    audio.onplay = () => {
+      showLyrics();
+      showVideo();
+    };
+
   </script>
 </body>
 </html>
