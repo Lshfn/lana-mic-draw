@@ -1,159 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Videogames - Interactive Drawing</title>
+  <meta charset="UTF-8" />
+  <title>Videogames Drawing</title>
   <style>
     body {
       margin: 0;
-      padding: 0;
       overflow: hidden;
-      background-color: black;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+      background: black;
     }
 
-    #canvas {
-      position: absolute;
-      z-index: 2;
-    }
-
-    #webcam {
+    canvas {
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
       z-index: 1;
     }
 
-    #lyrics {
+    video#webcam {
       position: absolute;
-      top: 10%;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      font-size: 2rem;
-      font-family: Arial, sans-serif;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.5s ease;
-      z-index: 3;
+      top: 20px;
+      right: 20px;
+      width: 160px;
+      height: 120px;
+      z-index: 2;
+      border: 2px solid white;
+      border-radius: 8px;
     }
 
-    #video {
+    video#videoclip {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
-      opacity: 0;
       z-index: 0;
-      transition: opacity 1s ease;
+      opacity: 0.1;
+      pointer-events: none;
+    }
+
+    #startButton {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 1rem 2rem;
+      font-size: 1.2rem;
+      z-index: 3;
+      cursor: pointer;
+      background: white;
+      border: none;
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
-  <!-- Video clip -->
-  <video id="video" autoplay loop muted>
-    <source src="https://files.catbox.moe/9qfgty.mp3" type="audio/mpeg">
-    Your browser does not support the video tag.
-  </video>
 
-  <!-- Webcam -->
-  <video id="webcam" autoplay></video>
-
-  <!-- Canvas for drawing -->
-  <canvas id="canvas"></canvas>
-
-  <!-- Lyrics display -->
-  <div id="lyrics">Videogames</div>
+  <video id="webcam" autoplay muted playsinline></video>
+  <video id="videoclip" src="https://files.catbox.moe/9qfgty.mp3" type="video/mp4" autoplay loop muted></video>
+  <canvas id="drawCanvas"></canvas>
+  <button id="startButton">Start</button>
 
   <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const startButton = document.getElementById('startButton');
     const webcam = document.getElementById('webcam');
-    const lyrics = document.getElementById('lyrics');
-    const video = document.getElementById('video');
-    
-    // Adjust canvas size
+    const videoclip = document.getElementById('videoclip');
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const audio = new Audio('https://files.catbox.moe/9qfgty.mp3');
+    audio.crossOrigin = 'anonymous';
+
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Set up webcam stream
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
+    function startExperience() {
+      startButton.style.display = 'none';
+
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
         webcam.srcObject = stream;
-      })
-      .catch(err => {
-        console.log("Error accessing webcam: ", err);
-      });
 
-    // Set up the audio
-    const audio = new Audio('https://files.catbox.moe/9qfgty.mp3');
-    audio.play();
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaElementSource(audio);
+        const analyser = audioContext.createAnalyser();
+        const micSource = audioContext.createMediaStreamSource(stream);
 
-    // Setup drawing
-    let drawing = false;
+        micSource.connect(analyser);
+        analyser.fftSize = 2048;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-    const draw = (e) => {
-      if (!drawing) return;
+        source.connect(audioContext.destination);
+        audio.play();
+        videoclip.play();
 
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+        function draw() {
+          requestAnimationFrame(draw);
+          analyser.getByteTimeDomainData(dataArray);
 
-      ctx.beginPath();
-      ctx.arc(x, y, 10, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-      ctx.fill();
-    };
+          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
 
-    canvas.addEventListener('mousemove', draw);
+          const radius = (average - 128) * 2;
+          const x = Math.random() * canvas.width;
+          const y = Math.random() * canvas.height;
 
-    // Function to show the lyrics at intervals
-    const showLyrics = () => {
-      const lyricText = [
-        "Singing in the moonlight...",
-        "Dancing through the night...",
-        // Add more lyrics here
-      ];
-
-      let currentIndex = 0;
-      const interval = setInterval(() => {
-        if (currentIndex < lyricText.length) {
-          lyrics.textContent = lyricText[currentIndex];
-          lyrics.style.opacity = 1;
-
-          // After a few seconds hide the lyrics and move to next
-          setTimeout(() => {
-            lyrics.style.opacity = 0;
-            currentIndex++;
-          }, 3000);
-        } else {
-          clearInterval(interval);
+          if (radius > 1) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.fill();
+          }
         }
-      }, 4000); // Update lyrics every 4 seconds
-    };
 
-    // Show video gradually
-    const showVideo = () => {
-      setTimeout(() => {
-        video.style.opacity = 1; // Fade in video
-      }, 2000); // Delay showing video
-    };
+        draw();
+      });
+    }
 
-    // Trigger the functions when the audio starts
-    audio.onplay = () => {
-      showLyrics();
-      showVideo();
-    };
-
+    startButton.addEventListener('click', startExperience);
   </script>
 </body>
 </html>
