@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Videogames Drawing</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: black;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #video-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -1;
+      opacity: 0.4;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="video-bg">
+    <iframe width="100%" height="100%" 
+      src="https://www.youtube.com/embed/cE6wxDqdOV0?autoplay=1&mute=1&loop=1&playlist=cE6wxDqdOV0" 
+      frameborder="0" allow="autoplay; encrypted-media" allowfullscreen>
+    </iframe>
+  </div>
+  <canvas id="draw-canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('draw-canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Access webcam and mic
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(stream => {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const micSource = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        micSource.connect(analyser);
+        analyser.fftSize = 256;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        let x = canvas.width / 2;
+        let y = canvas.height / 2;
+
+        function draw() {
+          analyser.getByteFrequencyData(dataArray);
+          const volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+
+          const angle = Math.random() * 2 * Math.PI;
+          const speed = volume / 20;
+          x += Math.cos(angle) * speed;
+          y += Math.sin(angle) * speed;
+
+          ctx.beginPath();
+          ctx.arc(x, y, 2 + volume / 30, 0, 2 * Math.PI);
+          ctx.fillStyle = `hsl(${volume * 2}, 100%, 70%)`;
+          ctx.fill();
+
+          requestAnimationFrame(draw);
+        }
+
+        draw();
+      })
+      .catch(err => {
+        console.error("Access denied or error: ", err);
+        alert("Please allow webcam and microphone access to run this experience.");
+      });
+  </script>
+</body>
+</html>
