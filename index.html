@@ -1,122 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Videogames Drawing</title>
+  <meta charset="UTF-8">
+  <title>Interactive Drawing with Lyrics</title>
   <style>
     body {
       margin: 0;
+      background-color: #111;
+      color: #f4f4f4;
+      font-family: 'Courier New', Courier, monospace;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       overflow: hidden;
-      background: black;
+    }
+
+    #canvas-container {
+      position: relative;
     }
 
     canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 1;
+      background-color: white;
+      border: 2px solid #ccc;
     }
 
-    video#webcam {
+    #webcam {
       position: absolute;
-      top: 20px;
-      right: 20px;
-      width: 160px;
-      height: 120px;
-      z-index: 2;
-      border: 2px solid white;
-      border-radius: 8px;
+      top: 10px;
+      right: 10px;
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      border: 2px solid #fff;
     }
 
-    video#videoclip {
+    .lyrics {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: 0;
-      opacity: 0.1;
-      pointer-events: none;
-    }
-
-    #startButton {
-      position: absolute;
-      top: 50%;
+      color: white;
+      font-size: 20px;
+      bottom: 20px;
       left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 1rem 2rem;
-      font-size: 1.2rem;
-      z-index: 3;
-      cursor: pointer;
-      background: white;
-      border: none;
-      border-radius: 8px;
+      transform: translateX(-50%);
+      text-align: center;
+      opacity: 0.7;
     }
+
   </style>
 </head>
 <body>
 
-  <video id="webcam" autoplay muted playsinline></video>
-  <video id="videoclip" src="https://files.catbox.moe/9qfgty.mp3" type="video/mp4" autoplay loop muted></video>
-  <canvas id="drawCanvas"></canvas>
-  <button id="startButton">Start</button>
+  <div id="canvas-container">
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <video id="video" width="800" height="600" autoplay muted loop>
+      <source src="https://github.com/Lshfn/lana-mic-draw/raw/main/LanaDelReyVideoGames.mp4" type="video/mp4">
+    </video>
+    <div id="lyrics" class="lyrics"></div>
+    <video id="webcam" autoplay></video>
+  </div>
 
   <script>
-    const startButton = document.getElementById('startButton');
+    // Set up webcam
     const webcam = document.getElementById('webcam');
-    const videoclip = document.getElementById('videoclip');
-    const canvas = document.getElementById('drawCanvas');
-    const ctx = canvas.getContext('2d');
-
-    const audio = new Audio('https://files.catbox.moe/9qfgty.mp3');
-    audio.crossOrigin = 'anonymous';
-
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    function startExperience() {
-      startButton.style.display = 'none';
-
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
         webcam.srcObject = stream;
+      })
+      .catch(err => console.error('Webcam error:', err));
 
-        const audioContext = new AudioContext();
-        const source = audioContext.createMediaElementSource(audio);
-        const analyser = audioContext.createAnalyser();
-        const micSource = audioContext.createMediaStreamSource(stream);
+    // Set up canvas drawing
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
 
-        micSource.connect(analyser);
-        analyser.fftSize = 2048;
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    canvas.addEventListener('mousedown', () => drawing = true);
+    canvas.addEventListener('mouseup', () => drawing = false);
+    canvas.addEventListener('mousemove', (e) => {
+      if (drawing) {
+        ctx.globalCompositeOperation = 'destination-out'; // Eraser effect
+        ctx.beginPath();
+        ctx.arc(e.offsetX, e.offsetY, 10, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+        ctx.closePath();
+      }
+    });
 
-        source.connect(audioContext.destination);
-        audio.play();
-        videoclip.play();
+    // Load VTT file for lyrics
+    const vttPath = "https://github.com/Lshfn/lana-mic-draw/raw/main/videogames-lyrics.vtt";
+    const lyricsElement = document.getElementById("lyrics");
+    let currentCaptionIndex = 0;
 
-        function draw() {
-          requestAnimationFrame(draw);
-          analyser.getByteTimeDomainData(dataArray);
+    // Fetch and parse the VTT file
+    fetch(vttPath)
+      .then(response => response.text())
+      .then(vttText => {
+        const captions = parseVTT(vttText);
+        displayCaptions(captions);
+      })
+      .catch(err => console.error('Error loading VTT:', err));
 
-          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-
-          const radius = (average - 128) * 2;
-          const x = Math.random() * canvas.width;
-          const y = Math.random() * canvas.height;
-
-          if (radius > 1) {
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, 2 * Math.PI);
-            ctx.fillStyle = 'rgba(255,255,255,0.1)';
-            ctx.fill();
+    // Parse VTT content
+    function parseVTT(vttText) {
+      const lines = vttText.split("\n");
+      const captions = [];
+      let currentCaption = {};
+      lines.forEach(line => {
+        if (line.trim() === '') return;
+        if (line.includes("-->")) {
+          if (currentCaption.start) {
+            captions.push(currentCaption);
           }
+          currentCaption = {
+            start: line.split(" --> ")[0],
+            end: line.split(" --> ")[1],
+            text: []
+          };
+        } else {
+          currentCaption.text.push(line.trim());
         }
-
-        draw();
       });
+      if (currentCaption.start) captions.push(currentCaption);
+      return captions;
     }
 
-    startButton.addEventListener('click', startExperience);
+    // Display captions based on video time
+    function displayCaptions(captions) {
+      const video = document.getElementById("video");
+      video.ontimeupdate = () => {
+        const currentTime = video.currentTime;
+        if (currentCaptionIndex < captions.length && currentTime >= getTimeInSeconds(captions[currentCaptionIndex].start)) {
+          lyricsElement.innerHTML = captions[currentCaptionIndex].text.join("<br>");
+          currentCaptionIndex++;
+        }
+      };
+    }
+
+    // Convert VTT time format to seconds
+    function getTimeInSeconds(timeStr) {
+      const timeParts = timeStr.split(":");
+      const minutes = parseInt(timeParts[0]);
+      const seconds = parseFloat(timeParts[1]);
+      return minutes * 60 + seconds;
+    }
   </script>
+
 </body>
 </html>
